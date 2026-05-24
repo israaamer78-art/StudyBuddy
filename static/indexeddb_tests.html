@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>StudyBuddy IndexedDB Tests</title>
+<style>
+body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 32px; line-height: 1.5; }
+.pass { color: #2f7a3e; }
+.fail { color: #a33a2d; }
+pre { background: #f5f5f5; padding: 12px; border-radius: 6px; }
+</style>
+<script src="/static/local_project_store.js"></script>
+</head>
+<body>
+<h1>IndexedDB Tests</h1>
+<pre id="log">Running...</pre>
+<script>
+const log = document.getElementById("log");
+const lines = [];
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function write(status, message) {
+  lines.push(`${status} ${message}`);
+  log.textContent = lines.join("\n");
+}
+
+async function test(name, fn) {
+  try {
+    await fn();
+    write("PASS", name);
+  } catch (error) {
+    write("FAIL", `${name}: ${error.message}`);
+    throw error;
+  }
+}
+
+(async () => {
+  const store = window.StudyBuddyLocalProjectStore;
+  await test("store API is exposed", async () => {
+    assert(store, "StudyBuddyLocalProjectStore missing");
+    assert(typeof store.saveProjectSnapshot === "function", "saveProjectSnapshot missing");
+    assert(typeof store.getProjectSnapshot === "function", "getProjectSnapshot missing");
+    assert(typeof store.clearProjectSnapshot === "function", "clearProjectSnapshot missing");
+  });
+
+  await test("clear removes existing snapshot", async () => {
+    await store.clearProjectSnapshot();
+    const snapshot = await store.getProjectSnapshot();
+    assert(snapshot === null, "snapshot should be null after clear");
+  });
+
+  await test("save and read project snapshot", async () => {
+    const project = store.makeProjectSnapshot({ version: 2, exams: [{ id: "exam-1", lectures: [] }] });
+    await store.saveProjectSnapshot(project);
+    const saved = await store.getProjectSnapshot();
+    assert(saved.app === "studybuddy", "app marker missing");
+    assert(saved.library.exams[0].id === "exam-1", "saved exam did not round-trip");
+  });
+
+  await test("overwrite project snapshot", async () => {
+    const project = store.makeProjectSnapshot({ version: 2, exams: [{ id: "exam-2", lectures: [] }] });
+    await store.saveProjectSnapshot(project);
+    const saved = await store.getProjectSnapshot();
+    assert(saved.library.exams.length === 1, "overwrite should keep one project");
+    assert(saved.library.exams[0].id === "exam-2", "latest snapshot not returned");
+  });
+
+  await store.clearProjectSnapshot();
+  write("DONE", "All IndexedDB tests passed.");
+})().catch(() => {
+  document.body.classList.add("fail");
+});
+</script>
+</body>
+</html>
